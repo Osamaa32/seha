@@ -3505,7 +3505,7 @@ if (!in_array($uiDataViewMode, ['table','compact','cards','zebra','glass','minim
             </button>
         </form>
         <div class="text-center mt-3">
-            <small class="text-muted">المستخدم الافتراضي: admin / admin123</small>
+            <small class="text-muted">المستخدم الافتراضي: _______</small>
         </div>
     </div>
 </div>
