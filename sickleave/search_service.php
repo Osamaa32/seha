@@ -70,7 +70,7 @@ function connect_db1(): ?mysqli {
         $conn = @new mysqli(
             'mysql.railway.internal',
             'root',
-            'mDxJcHtRORIlpLbtDJKKckeuLgozRUVO',
+            'CSCoMqXcUDBrzyRPMgjIxRVziMqcOFoK',
             'railway',
             3306
         );
