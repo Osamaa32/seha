@@ -3864,9 +3864,20 @@ if (!in_array($uiDataViewMode, ['table','compact','cards','zebra','glass','minim
                 <div class="card-body">
                     <!-- أدوات البحث والفلترة -->
                     <div class="toolbar">
+                        <div class="input-group" style="max-width:320px;">
+                            <span class="input-group-text"><i class="bi bi-lightning-charge"></i></span>
+                            <input type="text" class="form-control" id="globalQuickSearch" placeholder="بحث شامل سريع في كل الجداول...">
+                        </div>
                         <div class="input-group" style="max-width:280px;">
                             <input type="text" class="form-control" id="searchLeaves" placeholder="بحث...">
                             <button class="btn btn-gradient" id="btn-search-leaves"><i class="bi bi-search"></i></button>
+                        </div>
+                        <div class="input-group" style="max-width:280px;">
+                            <select class="form-select form-select-sm" id="leavesPresetSelect">
+                                <option value="">حفظ/استدعاء فلاتر</option>
+                            </select>
+                            <button class="btn btn-outline-primary btn-sm" id="saveLeavesPresetBtn"><i class="bi bi-bookmark-plus"></i></button>
+                            <button class="btn btn-outline-danger btn-sm" id="deleteLeavesPresetBtn"><i class="bi bi-trash"></i></button>
                         </div>
                         <input type="date" class="form-control" id="filterFromDate" style="max-width:150px;" title="من تاريخ">
                         <input type="date" class="form-control" id="filterToDate" style="max-width:150px;" title="إلى تاريخ">
@@ -3888,6 +3899,7 @@ if (!in_array($uiDataViewMode, ['table','compact','cards','zebra','glass','minim
                             <button class="btn btn-outline-secondary" id="sortLeavesReset"><i class="bi bi-arrow-counterclockwise"></i></button>
                         </div>
                     </div>
+                    <div id="leavesActiveFilterChips" class="d-flex flex-wrap gap-2 mb-2"></div>
                     <div class="table-responsive">
                         <table class="table table-bordered table-hover table-striped text-center mobile-readable" id="leavesTable">
                             <thead>
@@ -7328,6 +7340,44 @@ document.addEventListener('DOMContentLoaded', () => {
         payments: { search: '', sortCol: '', sortOrder: 'desc' },
         notifications: { search: '', sortMode: 'newest' }
     };
+    const LEAVES_PRESETS_KEY = 'leaves_filter_presets_v1';
+
+    function getLeavesPresets() {
+        try {
+            const parsed = JSON.parse(localStorage.getItem(LEAVES_PRESETS_KEY) || '{}');
+            return parsed && typeof parsed === 'object' ? parsed : {};
+        } catch (_) {
+            return {};
+        }
+    }
+
+    function saveLeavesPresets(presets) {
+        localStorage.setItem(LEAVES_PRESETS_KEY, JSON.stringify(presets || {}));
+    }
+
+    function renderLeavesPresetOptions() {
+        const sel = document.getElementById('leavesPresetSelect');
+        if (!sel) return;
+        const presets = getLeavesPresets();
+        const current = sel.value;
+        sel.innerHTML = '<option value="">حفظ/استدعاء فلاتر</option>' + Object.keys(presets).map(name => `<option value="${htmlspecialchars(name)}">${htmlspecialchars(name)}</option>`).join('');
+        if (current && presets[current]) sel.value = current;
+    }
+
+    function renderLeavesFilterChips() {
+        const box = document.getElementById('leavesActiveFilterChips');
+        if (!box) return;
+        const chips = [];
+        if (filtersState.leaves.search) chips.push(['search', `بحث: ${filtersState.leaves.search}`]);
+        if (filtersState.leaves.fromDate) chips.push(['fromDate', `من: ${filtersState.leaves.fromDate}`]);
+        if (filtersState.leaves.toDate) chips.push(['toDate', `إلى: ${filtersState.leaves.toDate}`]);
+        if (filtersState.leaves.typeFilter) chips.push(['typeFilter', `النوع: ${filtersState.leaves.typeFilter === 'paid' ? 'مدفوعة' : 'غير مدفوعة'}`]);
+        if (!chips.length) {
+            box.innerHTML = '<span class="text-muted small">لا توجد فلاتر مفعلة حالياً.</span>';
+            return;
+        }
+        box.innerHTML = chips.map(([key, label]) => `<button class="btn btn-sm btn-outline-secondary chip-remove-filter" data-key="${key}">${htmlspecialchars(label)} <i class="bi bi-x"></i></button>`).join('');
+    }
 
     function applyLeavesFilters() {
         filterAndSortTable(leavesTable, currentTableData.leaves, generateLeaveRow, {
@@ -7336,6 +7386,7 @@ document.addEventListener('DOMContentLoaded', () => {
             toDate: filtersState.leaves.toDate,
             typeFilter: filtersState.leaves.typeFilter
         }, filtersState.leaves.sortCol, filtersState.leaves.sortOrder);
+        renderLeavesFilterChips();
     }
 
     function applyPaymentsFilters() {
@@ -7424,32 +7475,62 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('searchLeaves').addEventListener('input', debounce(function() {
         filtersState.leaves.search = this.value;
         applyLeavesFilters();
-    }));
+    }, 80));
+
+    document.getElementById('globalQuickSearch')?.addEventListener('input', debounce(function() {
+        const value = this.value || '';
+        filtersState.leaves.search = value;
+        filtersState.archived.search = value;
+        filtersState.queries.search = value;
+        filtersState.doctors.search = value;
+        filtersState.patients.search = value;
+        filtersState.payments.search = value;
+        filtersState.notifications.search = value;
+
+        const map = [
+            ['searchLeaves', value],
+            ['searchArchived', value],
+            ['searchQueries', value],
+            ['searchDoctors', value],
+            ['searchPatients', value],
+            ['searchPayments', value],
+            ['searchNotifs', value]
+        ];
+        map.forEach(([id, v]) => { const el = document.getElementById(id); if (el) el.value = v; });
+
+        applyLeavesFilters();
+        applyArchivedFilters();
+        applyQueriesFilters();
+        applyDoctorsFilters();
+        applyPatientsFilters();
+        applyPaymentsFilters();
+        applyNotificationsFilters();
+    }, 120));
 
     document.getElementById('searchArchived').addEventListener('input', debounce(function() {
         filtersState.archived.search = this.value;
         applyArchivedFilters();
-    }));
+    }, 80));
 
     document.getElementById('searchQueries').addEventListener('input', debounce(function() {
         filtersState.queries.search = this.value;
         applyQueriesFilters();
-    }));
+    }, 80));
 
     document.getElementById('searchDoctors').addEventListener('input', debounce(function() {
         filtersState.doctors.search = this.value;
         applyDoctorsFilters();
-    }));
+    }, 80));
 
     document.getElementById('searchPatients').addEventListener('input', debounce(function() {
         filtersState.patients.search = this.value;
         applyPatientsFilters();
-    }));
+    }, 80));
 
     document.getElementById('searchPayments').addEventListener('input', debounce(function() {
         filtersState.payments.search = this.value;
         applyPaymentsFilters();
-    }));
+    }, 80));
 
     document.getElementById('showPaidLeaves').addEventListener('click', () => { filtersState.leaves.typeFilter = 'paid'; applyLeavesFilters(); });
     document.getElementById('showUnpaidLeaves').addEventListener('click', () => { filtersState.leaves.typeFilter = 'unpaid'; applyLeavesFilters(); });
@@ -7564,7 +7645,74 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('searchNotifs').addEventListener('input', debounce(function() {
         filtersState.notifications.search = this.value;
         applyNotificationsFilters();
-    }));
+    }, 80));
+
+    ['searchLeaves','searchArchived','searchQueries','searchDoctors','searchPatients','searchPayments','searchNotifs'].forEach((id) => {
+        const input = document.getElementById(id);
+        if (!input) return;
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                input.value = '';
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        });
+    });
+
+    document.getElementById('leavesActiveFilterChips')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('.chip-remove-filter');
+        if (!btn) return;
+        const key = btn.dataset.key;
+        if (!key) return;
+        filtersState.leaves[key] = '';
+        if (key === 'search') document.getElementById('searchLeaves').value = '';
+        if (key === 'fromDate') document.getElementById('filterFromDate').value = '';
+        if (key === 'toDate') document.getElementById('filterToDate').value = '';
+        if (key === 'typeFilter') document.getElementById('filterType').value = '';
+        applyLeavesFilters();
+    });
+
+    document.getElementById('saveLeavesPresetBtn')?.addEventListener('click', () => {
+        const name = prompt('اكتب اسم الفلتر المحفوظ:');
+        if (!name || !name.trim()) return;
+        const presets = getLeavesPresets();
+        presets[name.trim()] = {
+            search: filtersState.leaves.search || '',
+            fromDate: filtersState.leaves.fromDate || '',
+            toDate: filtersState.leaves.toDate || '',
+            typeFilter: filtersState.leaves.typeFilter || ''
+        };
+        saveLeavesPresets(presets);
+        renderLeavesPresetOptions();
+        showToast('تم حفظ الفلتر بنجاح.', 'success');
+    });
+
+    document.getElementById('deleteLeavesPresetBtn')?.addEventListener('click', () => {
+        const sel = document.getElementById('leavesPresetSelect');
+        if (!sel || !sel.value) return showToast('اختر فلترًا أولاً.', 'warning');
+        const presets = getLeavesPresets();
+        delete presets[sel.value];
+        saveLeavesPresets(presets);
+        renderLeavesPresetOptions();
+        showToast('تم حذف الفلتر.', 'success');
+    });
+
+    document.getElementById('leavesPresetSelect')?.addEventListener('change', function() {
+        const val = this.value;
+        if (!val) return;
+        const presets = getLeavesPresets();
+        const preset = presets[val];
+        if (!preset) return;
+        filtersState.leaves.search = preset.search || '';
+        filtersState.leaves.fromDate = preset.fromDate || '';
+        filtersState.leaves.toDate = preset.toDate || '';
+        filtersState.leaves.typeFilter = preset.typeFilter || '';
+        document.getElementById('searchLeaves').value = filtersState.leaves.search;
+        document.getElementById('filterFromDate').value = filtersState.leaves.fromDate;
+        document.getElementById('filterToDate').value = filtersState.leaves.toDate;
+        document.getElementById('filterType').value = filtersState.leaves.typeFilter;
+        applyLeavesFilters();
+        showToast('تم تطبيق الفلتر المحفوظ.', 'success');
+    });
     document.getElementById('sortNotifsNewest').addEventListener('click', () => { filtersState.notifications.sortMode = 'newest'; applyNotificationsFilters(); });
     document.getElementById('sortNotifsOldest').addEventListener('click', () => { filtersState.notifications.sortMode = 'oldest'; applyNotificationsFilters(); });
     document.getElementById('sortNotifsMostRepeated').addEventListener('click', () => { filtersState.notifications.sortMode = 'mostRepeated'; applyNotificationsFilters(); });
@@ -7946,6 +8094,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (toInput) toInput.setAttribute('disabled', 'disabled');
 
     // ====== التحميل الأولي ======
+    renderLeavesPresetOptions();
     applyAllCurrentFilters();
     refreshSensitiveValuesMask();
     document.getElementById('toggleSensitiveAmounts')?.addEventListener('click', (e) => {
